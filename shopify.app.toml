@@ -3,7 +3,7 @@
 client_id = "f6a1fc59c29c7b7a56a96ed7ab3c01f9"
 name = "EpicOrderFulfill"
 handle = "epic-order-fulfill"
-application_url = "https://regarded-op-e-glenn.trycloudflare.com"
+application_url = "https://heroes-bm-cholesterol-trunk.trycloudflare.com"
 embedded = true
 
 [build]
@@ -19,9 +19,9 @@ scopes = "read_customers,read_orders,write_assigned_fulfillment_orders,write_cus
 
 [auth]
 redirect_urls = [
-  "https://regarded-op-e-glenn.trycloudflare.com/auth/callback",
-  "https://regarded-op-e-glenn.trycloudflare.com/auth/shopify/callback",
-  "https://regarded-op-e-glenn.trycloudflare.com/api/auth/callback"
+  "https://heroes-bm-cholesterol-trunk.trycloudflare.com/auth/callback",
+  "https://heroes-bm-cholesterol-trunk.trycloudflare.com/auth/shopify/callback",
+  "https://heroes-bm-cholesterol-trunk.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

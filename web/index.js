@@ -50,7 +50,6 @@ app.post(
   async (req, res) => {
     const session = res.locals.shopify.session;
     const { shop, accessToken } = session;
-
     const client = new shopify.api.clients.Graphql({ session });
 
     if (!req.file) {
@@ -74,36 +73,38 @@ app.post(
           `https://www.indiapost.gov.in/VAS/Pages/trackconsignment.aspx?tn=${trackingNumber}`;
 
         try {
-          // Get Order ID
+          // Get Order ID via REST API
           const restRes = await axios.get(
             `https://${shop}/admin/api/2024-04/orders.json?name=${encodeURIComponent(
               orderName
             )}`,
             { headers: { "X-Shopify-Access-Token": accessToken } }
-          );
 
+          );
+          console.log(accessToken);
+          
           const orderData = restRes.data.orders?.[0];
           if (!orderData || !orderData.id) throw new Error("Order not found");
 
           const orderId = parseInt(orderData.id);
           const gid = `gid://shopify/Order/${orderId}`;
 
-          // Get Fulfillment Order
+          // Get all Fulfillment Orders via GraphQL
           const fulfillmentOrderData = await client.query({
             data: {
               query: `
-                query ($id: ID!) {
-                  order(id: $id) {
-                    fulfillmentOrders(first: 1) {
-                      edges {
-                        node {
-                          id
-                          lineItems(first: 10) {
-                            edges {
-                              node {
-                                id
-                                remainingQuantity
-                              }
+              query ($id: ID!) {
+                order(id: $id) {
+                  fulfillmentOrders(first: 10) {
+                    edges {
+                      node {
+                        id
+                        status
+                        lineItems(first: 10) {
+                          edges {
+                            node {
+                              id
+                              remainingQuantity
                             }
                           }
                         }
@@ -111,20 +112,35 @@ app.post(
                     }
                   }
                 }
-              `,
+              }
+            `,
               variables: { id: gid },
             },
           });
 
-          const fulfillmentOrder =
-            fulfillmentOrderData.body.data.order.fulfillmentOrders.edges[0]
-              ?.node;
-          if (!fulfillmentOrder) throw new Error("Fulfillment order not found");
+          const fulfillmentOrders =
+            fulfillmentOrderData.body.data.order.fulfillmentOrders.edges
+              .map((edge) => edge.node)
+              .filter(
+                (fo) =>
+                  fo.status === "OPEN" &&
+                  fo.lineItems.edges.some((li) => li.node.remainingQuantity > 0)
+              );
 
-          // Create Fulfillment
-          const fulfillmentResult = await client.query({
-            data: {
-              query: `
+          if (fulfillmentOrders.length === 0) {
+            results.push({
+              orderName,
+              error:
+                "No valid fulfillment orders to fulfill (already fulfilled or closed)",
+            });
+            continue;
+          }
+
+          // Fulfill each valid fulfillment order
+          for (const fulfillmentOrder of fulfillmentOrders) {
+            const fulfillmentResult = await client.query({
+              data: {
+                query: `
                 mutation FulfillmentCreate($fulfillment: FulfillmentV2Input!) {
                   fulfillmentCreateV2(fulfillment: $fulfillment) {
                     fulfillment { id status }
@@ -132,35 +148,36 @@ app.post(
                   }
                 }
               `,
-              variables: {
-                fulfillment: {
-                  lineItemsByFulfillmentOrder: [
-                    {
-                      fulfillmentOrderId: fulfillmentOrder.id,
-                      fulfillmentOrderLineItems:
-                        fulfillmentOrder.lineItems.edges.map((item) => ({
-                          id: item.node.id,
-                          quantity: item.node.remainingQuantity,
-                        })),
+                variables: {
+                  fulfillment: {
+                    lineItemsByFulfillmentOrder: [
+                      {
+                        fulfillmentOrderId: fulfillmentOrder.id,
+                        fulfillmentOrderLineItems:
+                          fulfillmentOrder.lineItems.edges.map((item) => ({
+                            id: item.node.id,
+                            quantity: item.node.remainingQuantity,
+                          })),
+                      },
+                    ],
+                    trackingInfo: {
+                      number: trackingNumber,
+                      company: trackingCompany,
+                      url: trackingUrl,
                     },
-                  ],
-                  trackingInfo: {
-                    number: trackingNumber,
-                    company: trackingCompany,
-                    url: trackingUrl,
+                    notifyCustomer: true,
                   },
-                  notifyCustomer: true,
                 },
               },
-            },
-          });
+            });
 
-          const result = fulfillmentResult.body.data.fulfillmentCreateV2;
+            const result = fulfillmentResult.body.data.fulfillmentCreateV2;
 
-          if (result.userErrors.length > 0) {
-            results.push({ orderName, error: result.userErrors[0].message });
-          } else {
-            results.push({ orderName, fulfillmentId: result.fulfillment.id });
+            if (result.userErrors.length > 0) {
+              results.push({ orderName, error: result.userErrors[0].message });
+            } else {
+              results.push({ orderName, fulfillmentId: result.fulfillment.id });
+            }
           }
         } catch (err) {
           results.push({ orderName, error: err.message || "Unknown error" });
@@ -182,6 +199,7 @@ app.post(
     }
   }
 );
+
 
 // 🔍 NEW: Report Summary API
 app.get("/api/orders/fulfillment-report", (req, res) => {
