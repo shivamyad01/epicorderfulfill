@@ -1,26 +1,28 @@
-# fly.toml app configuration file generated for epic-fulfill-bulk-orders on 2025-05-09T14:08:44+05:30
+# fly.toml app configuration file generated for epicorderfulfill on 2025-06-02T12:58:24+05:30
+#
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "epic-fulfill-bulk-orders"
+app = "epicorderfulfill"
 primary_region = "bom"
 
 [env]
   PORT = "8081"
-  HOST = "https://epic-fulfill-bulk-orders.fly.dev"
-  SHOPIFY_API_KEY = "aeeb5a0125694f9a00b74968e3d69b66"
-  SCOPES = "read_customers,read_orders,write_assigned_fulfillment_orders,write_customers,write_fulfillments,write_merchant_managed_fulfillment_orders,write_orders,write_third_party_fulfillment_orders"
+  HOST = "https://epicorderfulfill.fly.dev"
+  SHOPIFY_API_KEY = "f6a1fc59c29c7b7a56a96ed7ab3c01f9"
+  SCOPES = "read_orders,write_orders,write_fulfillments,write_assigned_fulfillment_orders,write_merchant_managed_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,write_customers"
 
 [build]
 
 [http_service]
   internal_port = 8081
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = true     # corrected from 'stop' to true
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ["app"]           # corrected single quotes to double quotes
 
 [[vm]]
-  memory = "1gb"
+  memory = "1gb"                # corrected single quotes to double quotes
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 1                      # moved 'cpus = 1' to its correct line; removed the stray text

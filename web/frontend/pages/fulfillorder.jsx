@@ -1,14 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   Page,
   Layout,
-  TextContainer,
   Text,
   Button,
   Stack,
   Banner,
   DropZone,
+  HorizontalGrid,
+  Box,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -79,7 +80,7 @@ export default function FulfillOrder() {
     });
 
     const blob = new Blob([excelBuffer], {
-      type: "application/octet-stream", // ✅ Broader MIME type
+      type: "application/octet-stream",
     });
 
     const link = document.createElement("a");
@@ -88,37 +89,100 @@ export default function FulfillOrder() {
     link.click();
   };
 
+  const renderImportSummary = () => {
+    if (!result) return null;
+
+    const total = result.length;
+    const success = result.filter((r) => !r.error).length;
+    const failed = total - success;
+    const status = failed > 0 ? "Completed with errors" : "Import complete";
+
+    return (
+      <Layout.Section>
+        <Card title="Import Summary">
+          <Box padding="4">
+            <HorizontalGrid
+              columns={{
+                xs: 1,
+                sm: 6,
+              }}
+              gap="4"
+              alignItems="center"
+              paddingBlockStart="200"
+              paddingBlockEnd="200"
+              borderColor="border"
+              borderRadius="base"
+              background="bg-surface"
+            >
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Date
+              </Text>
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Import source
+              </Text>
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Total Upload
+              </Text>
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Successful
+              </Text>
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Failed
+              </Text>
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Status
+              </Text>
+
+              <Text as="span">{new Date().toLocaleDateString("en-GB")}</Text>
+              <Text as="span">Epic Fulfill</Text>
+              <Text as="span">{total}</Text>
+              <Text as="span">{success}</Text>
+              <Text as="span">{failed}</Text>
+              <Text as="span">{status}</Text>
+            </HorizontalGrid>
+          </Box>
+        </Card>
+      </Layout.Section>
+    );
+  };
+
+  // Fetch saved summary from server when component mounts
+  useEffect(() => {
+    const fetchSavedSummary = async () => {
+      try {
+        const res = await fetch("/api/orders/fulfillment-report");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.report?.length > 0) {
+          setResult(data.report);
+        }
+      } catch (err) {
+        console.error("No previous report found or fetch failed.");
+      }
+    };
+
+    fetchSavedSummary();
+  }, []);
+
   return (
     <Page fullWidth>
-      <TitleBar title={t("PageName.title")} />
+      <TitleBar title="Epic Fulfill: Bulk Orders" />
 
       <Layout>
-          <Layout.Section>
+        <Layout.Section>
           <Card
-            title={t(
-              "BulkFulfillmentCard.title",
-              "Bulk Fulfill Orders via Spreadsheet"
-            )}
+            title="Bulk Fulfill Orders via Excel"
             sectioned
             primaryFooterAction={{
-              content: uploading
-                ? t("BulkFulfillmentCard.uploading", "Uploading...")
-                : t(
-                    "BulkFulfillmentCard.uploadAndFulfillButton",
-                    "Upload and Fulfill Orders"
-                  ),
+              content: uploading ? "Uploading..." : "Upload and Fulfill Orders",
               onAction: handleUpload,
               loading: uploading,
               disabled: !file || uploading,
             }}
             secondaryFooterActions={[
               {
-                content: t(
-                  "BulkFulfillmentCard.downloadSampleButton",
-                  "Download Sample Excel"
-                ),
+                content: "Download Sample Excel",
                 onAction: handleDownloadSample,
-                outline: true,
               },
             ]}
           >
@@ -139,37 +203,17 @@ export default function FulfillOrder() {
 
             {error && (
               <Banner
-                title={t("BulkFulfillmentCard.uploadFailed", "Upload failed")}
+                title="Upload failed"
                 status="critical"
                 onDismiss={() => setError(null)}
               >
                 <p>{error}</p>
               </Banner>
             )}
-
-            {result && (
-              <Banner
-                title={t(
-                  "BulkFulfillmentCard.results",
-                  "Bulk Fulfillment Results"
-                )}
-                status="success"
-                onDismiss={() => setResult(null)}
-              >
-                <ul>
-                  {result.map((r, index) => (
-                    <li key={index}>
-                      {r.orderName}:{" "}
-                      {r.error
-                        ? `❌ ${r.error}`
-                        : `✅ Fulfilled (ID: ${r.fulfillmentId})`}
-                    </li>
-                  ))}
-                </ul>
-              </Banner>
-            )}
           </Card>
         </Layout.Section>
+
+        {renderImportSummary()}
       </Layout>
     </Page>
   );

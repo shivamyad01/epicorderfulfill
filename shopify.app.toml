@@ -1,10 +1,14 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "f6a1fc59c29c7b7a56a96ed7ab3c01f9"
-name = "VaidbanOrderFulfill"
-handle = "vaidbanorderfulfill"
-application_url = "https://algorithm-command-living-tower.trycloudflare.com"
+name = "EpicOrderFulfill"
+handle = "epic-order-fulfill"
+application_url = "https://regarded-op-e-glenn.trycloudflare.com"
 embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
 
 [webhooks]
 api_version = "2025-04"
@@ -15,13 +19,10 @@ scopes = "read_customers,read_orders,write_assigned_fulfillment_orders,write_cus
 
 [auth]
 redirect_urls = [
-  "https://algorithm-command-living-tower.trycloudflare.com/auth/callback",
-  "https://algorithm-command-living-tower.trycloudflare.com/auth/shopify/callback",
-  "https://algorithm-command-living-tower.trycloudflare.com/api/auth/callback"
+  "https://regarded-op-e-glenn.trycloudflare.com/auth/callback",
+  "https://regarded-op-e-glenn.trycloudflare.com/auth/shopify/callback",
+  "https://regarded-op-e-glenn.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
 embedded = false
-
-[build]
-automatically_update_urls_on_dev = true

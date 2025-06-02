@@ -1,9 +1,3 @@
-
-
-
-
-
-
 // @ts-check
 import { join } from "path";
 import { readFileSync } from "fs";
@@ -13,6 +7,10 @@ import serveStatic from "serve-static";
 import shopify from "./shopify.js";
 import productCreator from "./product-creator.js";
 import PrivacyWebhookHandlers from "./privacy.js";
+
+import multer from "multer";
+import xlsx from "xlsx";
+import fs from "fs";
 
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
@@ -25,6 +23,11 @@ const STATIC_PATH =
     : `${process.cwd()}/frontend/`;
 
 const app = express();
+
+// 🧠 Store fulfillment summary in memory
+let lastFulfillmentSummary = [];
+
+const upload = multer({ dest: "uploads/" });
 
 // Setup Shopify authentication and webhook handling
 app.get(shopify.config.auth.path, shopify.auth.begin());
@@ -41,62 +44,13 @@ app.post(
 app.use("/api/*", shopify.validateAuthenticatedSession());
 app.use(express.json());
 
-
-
-
-
-
-import multer from "multer";
-import xlsx from "xlsx";
-import fs from "fs";
-
-const upload = multer({ dest: "uploads/" });
-
-
-
-// app.get("/api/products/count", async (_req, res) => {
-//   const client = new shopify.api.clients.Graphql({
-//     session: res.locals.shopify.session,
-//   });
-
-//   const countData = await client.request(`
-//     query shopifyProductCount {
-//       productsCount {
-//         count
-//       }
-//     }
-//   `);
-
-//   res.status(200).send({ count: countData.data.productsCount.count });
-// });
-
-
-
-
-// app.post("/api/products", async (_req, res) => {
-//   let status = 200;
-//   let error = null;
-
-//   try {
-//     await productCreator(res.locals.shopify.session);
-//   } catch (e) {
-//     console.log(`Failed to process products/create: ${e.message}`);
-//     status = 500;
-//     error = e.message;
-//   }
-//   res.status(status).send({ success: status === 200, error });
-// });
-
-
-
 app.post(
   "/api/orders/bulk-fulfill",
   upload.single("file"),
   async (req, res) => {
     const session = res.locals.shopify.session;
     const { shop, accessToken } = session;
-    console.log(accessToken);
-    
+
     const client = new shopify.api.clients.Graphql({ session });
 
     if (!req.file) {
@@ -138,17 +92,18 @@ app.post(
           const fulfillmentOrderData = await client.query({
             data: {
               query: `
-              query ($id: ID!) {
-                order(id: $id) {
-                  fulfillmentOrders(first: 1) {
-                    edges {
-                      node {
-                        id
-                        lineItems(first: 10) {
-                          edges {
-                            node {
-                              id
-                              remainingQuantity
+                query ($id: ID!) {
+                  order(id: $id) {
+                    fulfillmentOrders(first: 1) {
+                      edges {
+                        node {
+                          id
+                          lineItems(first: 10) {
+                            edges {
+                              node {
+                                id
+                                remainingQuantity
+                              }
                             }
                           }
                         }
@@ -156,8 +111,7 @@ app.post(
                     }
                   }
                 }
-              }
-            `,
+              `,
               variables: { id: gid },
             },
           });
@@ -171,13 +125,13 @@ app.post(
           const fulfillmentResult = await client.query({
             data: {
               query: `
-              mutation FulfillmentCreate($fulfillment: FulfillmentV2Input!) {
-                fulfillmentCreateV2(fulfillment: $fulfillment) {
-                  fulfillment { id status }
-                  userErrors { field message }
+                mutation FulfillmentCreate($fulfillment: FulfillmentV2Input!) {
+                  fulfillmentCreateV2(fulfillment: $fulfillment) {
+                    fulfillment { id status }
+                    userErrors { field message }
+                  }
                 }
-              }
-            `,
+              `,
               variables: {
                 fulfillment: {
                   lineItemsByFulfillmentOrder: [
@@ -213,7 +167,10 @@ app.post(
         }
       }
 
-      // Cleanup uploaded file
+      // Save summary in memory
+      lastFulfillmentSummary = results;
+
+      // Delete uploaded file
       fs.unlinkSync(req.file.path);
 
       return res.status(200).json({ summary: results });
@@ -226,7 +183,16 @@ app.post(
   }
 );
 
+// 🔍 NEW: Report Summary API
+app.get("/api/orders/fulfillment-report", (req, res) => {
+  if (!lastFulfillmentSummary || lastFulfillmentSummary.length === 0) {
+    return res
+      .status(404)
+      .json({ message: "No fulfillment summary available yet." });
+  }
 
+  return res.status(200).json({ report: lastFulfillmentSummary });
+});
 
 // Serve frontend
 app.use(shopify.cspHeaders());
@@ -253,16 +219,3 @@ app.use("/*", async (req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
